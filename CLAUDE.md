@@ -16,25 +16,31 @@ VisionScribe 是一个基于 AI 的视频转代码/文档转换工具，核心�
 ## 3. 不同阶段的设计
 ### 4-Stage 工作流程
 
-**阶段 1: 视频转时间戳图片**
-- 命令：`visionscribe frames`
-- 功能：从视频中提取帧，保存为带时间戳的图片
+**阶段 1: 视频切片**
+- 命令：`visionscribe slice`
+- 功能：将视频切片为带时间戳的图片
 - 输出：图片文件 + frames_metadata.json
 
-**阶段 2: 图片转OCR JSON**
-- 命令：`visionscribe ocr`
-- 功能：对图片进行 OCR 处理，生成结构化 JSON
+**阶段 2: 读取文字**
+- 命令：`visionscribe read`
+- 功能：从图片中读取文字，生成结构化 JSON
 - 输出：包含文字、置信度、位置信息的 JSON 文件
 
-**阶段 3: AI分析和去重**
+**阶段 3: AI分析**
 - 命令：`visionscribe analyze`
 - 功能：使用 AI 分析内容，去除重复文字
 - 输出：经过 AI 处理的精简 JSON 数据
 
-**阶段 4: JSON转项目文件**
-- 命令：`visionscribe build`
-- 功能：将分析结果转换为实际项目文件
-- 输出：代码文件、文档文件、构建摘要
+**阶段 4: 重建项目**
+- 命令：`visionscribe rebuild`
+- 功能：将分析结果重建为实际项目文件
+- 输出：代码文件、文档文件、重建摘要
+
+### 一键提取完整流程
+**完整处理**
+- 命令：`visionscribe extract`
+- 功能：一键完成 slice → read → analyze → rebuild 的完整流程
+- 输出：完整的项目文件和文档
 
 ## 4. Python 3 + 类型提示 + 代码风格
 
@@ -100,14 +106,20 @@ cd /Users/zhihu/output/github/visionscribe
 uv run visionscribe --help
 
 # 验证特定命令
+uv run visionscribe slice --help
+uv run visionscribe read --help
 uv run visionscribe analyze --help
-uv run visionscribe build --help
+uv run visionscribe rebuild --help
+uv run visionscribe extract --help
 
 # 直接运行模块
 uv run python3 -m visionscribe.main --help
 
 # 测试完整工作流
-echo '{"test": "data"}' > test.json && uv run visionscribe analyze test.json -o output.json
+uv run visionscribe slice tests/examples/firstdemo.mov ./test_output --fps 2
+uv run visionscribe read ./test_output/frames/ ./test_text.json
+uv run visionscribe analyze ./test_text.json ./test_analysis.json
+uv run visionscribe rebuild ./test_analysis.json ./test_project --format both
 ```
 
 #### 开发环境验证
@@ -159,16 +171,21 @@ src/
 cd /Users/zhihu/output/github/visionscribe
 
 # 测试各个阶段
-uv run visionscribe analyze tests/examples/workflow_demo/stage2/ocr_data.json --output tests/examples/workflow_demo/stage3/ai_analysis.json
-uv run visionscribe build tests/examples/workflow_demo/stage3/ai_analysis.json tests/examples/workflow_demo/stage4 --format both
+uv run visionscribe slice tests/examples/demo.mp4 ./demo_output --fps 2
+uv run visionscribe read ./demo_output/frames/ ./demo_text.json
+uv run visionscribe analyze ./demo_text.json ./demo_analysis.json
+uv run visionscribe rebuild ./demo_analysis.json ./demo_project --format both
 ```
 
 #### 演示文件结构
 ```
 tests/examples/workflow_demo/
-├── stage2/                # OCR 输出示例
-│   └── ocr_data.json      # OCR 处理结果
-└── stage3/                # AI 分析示例
+├── stage1/                # 视频切片结果
+│   ├── frames/           # 切片图片
+│   └── frames_metadata.json  # 切片元数据
+├── stage2/                # 读取文字结果
+│   └── text_data.json    # 文字识别结果
+└── stage3/                # AI 分析结果
     └── ai_analysis.json   # AI 分析结果
 ```
 
@@ -176,3 +193,4 @@ tests/examples/workflow_demo/
 - 所有测试数据都在 `.gitignore` 中，不会提交到 git
 - 使用 `uv run` 进行测试，避免依赖全局安装
 - 测试数据为模拟数据，用于验证 CLI 功能
+- 演示使用 `firstdemo.mov` 作为示例视频文件
