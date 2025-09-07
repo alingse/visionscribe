@@ -162,18 +162,19 @@ OPENAI_API_KEY=your_openai_api_key_here
 
 @main.command()
 @click.argument("input_file", type=click.Path(exists=True, path_type=Path))
-@click.option("--output", "-o", default="./frames", help="Output directory", type=click.Path(path_type=Path))
+@click.argument("output_dir", type=click.Path(path_type=Path))
 @click.option("--fps", default=1, help="Frame extraction FPS")
 @click.option("--dedup", is_flag=True, help="Enable frame deduplication")
-def frames(input_file: Path, output: Path, fps: int, dedup: bool) -> None:
+def frames(input_file: Path, output_dir: Path, fps: int, dedup: bool) -> None:
     """Extract frames from video with timestamp info.
     
     Stage 1: Extract key frames from video and save as timestamped images.
     
     This command analyzes video content and extracts frames at specified intervals,
     removing duplicates if enabled. Each frame is saved with timestamp metadata.
+    The frames are saved in a 'frames' subdirectory with timestamp-based naming.
     
-    Example: visionscribe frames tutorial.mp4 ./extracted-frames
+    Example: visionscribe frames tutorial.mp4 ./output-dir
     """
     try:
         video_processor = VideoProcessor()
@@ -186,30 +187,46 @@ def frames(input_file: Path, output: Path, fps: int, dedup: bool) -> None:
             click.echo("🧹 Removing duplicate frames...")
             frames = video_processor.deduplicate_frames(frames)
         
-        output.mkdir(parents=True, exist_ok=True)
+        # Create frames directory
+        frames_dir = output_dir / "frames"
+        frames_dir.mkdir(parents=True, exist_ok=True)
         
         # Save frames with metadata
         metadata = []
         for i, frame in enumerate(frames):
             timestamp = frame.timestamp if hasattr(frame, 'timestamp') else i / fps
-            frame_path = output / f"frame_{i:04d}_t{timestamp:.2f}.jpg"
-            frame.save(str(frame_path))
+            
+            # Convert timestamp to time format (HH:MM:SS.mmm)
+            hours = int(timestamp // 3600)
+            minutes = int((timestamp % 3600) // 60)
+            seconds = int(timestamp % 60)
+            milliseconds = int((timestamp % 1) * 1000)
+            
+            # Create filename with sequential number and timestamp
+            time_str = f"{hours:02d}{minutes:02d}{seconds:02d}_{milliseconds:03d}"
+            frame_path = frames_dir / f"frame_{i:04d}_{time_str}.jpg"
+            
+            # Save frame
+            img = Image.open(frame.image_path) if hasattr(frame, 'image_path') else frame
+            img.save(str(frame_path))
             
             # Store metadata
             metadata.append({
                 "frame_id": i,
                 "file_path": str(frame_path),
                 "timestamp": timestamp,
-                "size": frame.size if hasattr(frame, 'size') else (0, 0)
+                "time_format": f"{hours:02d}:{minutes:02d}:{seconds:02d}.{milliseconds:03d}",
+                "size": img.size if hasattr(img, 'size') else (0, 0)
             })
         
         # Save metadata JSON
-        metadata_file = output / "frames_metadata.json"
+        metadata_file = frames_dir / "frames_metadata.json"
         with open(metadata_file, 'w') as f:
             json.dump(metadata, f, indent=2)
         
-        click.echo(f"✅ Extracted {len(frames)} frames to {output}")
-        click.echo(f"📄 Metadata saved to {metadata_file}")
+        click.echo(f"✅ 共切分了 {len(frames)} 个图片")
+        click.echo(f"📁 图片保存在: {frames_dir}")
+        click.echo(f"📄 元数据保存在: {metadata_file}")
         
     except Exception as e:
         click.echo(f"❌ Error: {e}", err=True)
